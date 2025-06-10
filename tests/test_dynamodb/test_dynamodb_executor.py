@@ -430,3 +430,46 @@ def test_execution_of_delete_element_from_a_string_attribute(table):
         assert False, "Must raise exception"
     except IncorrectDataType:
         assert True
+
+
+def test_executor_handles_mixed_attribute_name_types(table):
+    initial_item = Item(
+        hash_key=DynamoType({"S": "id"}),
+        range_key=None,
+        attrs={
+            "id": {"S": "1"},
+            "direct_name": {"S": "initial_value_1"},
+            "resolved_name": {"S": "initial_value_2"},
+        },
+    )
+
+    update_expression = "SET direct_name = :val1, #ph = :val2"
+    expression_attribute_names = {"#ph": "resolved_name"}
+    expression_attribute_values = {
+        ":val1": {"S": "new_value_1"},
+        ":val2": {"S": "new_value_2"},
+    }
+
+    update_expression_ast = UpdateExpressionParser.make(update_expression)
+    validated_ast = UpdateExpressionValidator(
+        update_expression_ast,
+        expression_attribute_names=expression_attribute_names,
+        expression_attribute_values=expression_attribute_values,
+        item=initial_item,
+        table=table,
+    ).validate()
+    UpdateExpressionExecutor(
+        validated_ast, initial_item, expression_attribute_names
+    ).execute()
+
+    expected_item = Item(
+        hash_key=DynamoType({"S": "id"}),
+        range_key=None,
+        attrs={
+            "id": {"S": "1"},
+            "direct_name": {"S": "new_value_1"},
+            "resolved_name": {"S": "new_value_2"},
+        },
+    )
+
+    assert expected_item == initial_item
